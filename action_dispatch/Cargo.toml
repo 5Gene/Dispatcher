@@ -1,0 +1,21 @@
+[package]
+name = "action_dispatch"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "通用的基于属性宏的 Action 注册与分发系统，支持正则匹配、优先级、全局同步执行模式"
+keywords = ["action", "dispatch", "macro", "event", "handler"]
+categories = ["rust-patterns", "asynchronous"]
+
+[dependencies]
+action_dispatch_core = { path = "../action_dispatch_core", version = "0.1.0" }
+action_dispatch_macro = { path = "../action_dispatch_macro", version = "0.1.0" }
+
+[lib]
+name = "action_dispatch"
+path = "src/lib.rs"
+
+[dev-dependencies]
+# 用于测试
+

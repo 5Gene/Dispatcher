@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "action_dispatch",
+    "action_dispatch_core",
+    "action_dispatch_macro",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Action Dispatch Contributors"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/example/action_dispatch"
+
+[workspace.dependencies]
+# 核心依赖
+regex = "1.10"
+once_cell = "1.19"
+inventory = "0.3"
+
+# 宏依赖
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+

@@ -1,0 +1,16 @@
+[package]
+name = "action_dispatch_core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+regex = { workspace = true }
+once_cell = { workspace = true }
+inventory = { workspace = true }
+
+[lib]
+name = "action_dispatch_core"
+path = "src/lib.rs"
+

@@ -1,341 +1,424 @@
-# Action Dispatch - Python 版本
+# Action Dispatch
 
-高性能的基于装饰器的 Action 注册与分发系统
+> 一个通用的、高性能的、基于属性宏的 Action 注册与分发系统
 
-## 特性
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
 
-与 Rust 版本功能对等：
+## ✨ 特性
 
-- ✅ **声明式注册**：使用 `@action` 装饰器
-- ✅ **正则匹配 + 优先级**：灵活的路由规则
-- ✅ **全局同步模式**：支持 `sync=True` 全局排他执行
-- ✅ **分层匹配优化**：精确匹配 O(1)、前缀匹配 O(m)、正则匹配 O(k)
-- ✅ **RwLock 优化**：并发执行 `sync=False` 的 action
-- ✅ **类型提示**：完整的类型注解
-- ✅ **引用传递**：Python 默认就是对象引用，零拷贝
+- 🎯 **声明式注册**：使用 `#[action(...)]` 属性宏标记处理函数，自动注册
+- 🔍 **正则匹配**：支持正则表达式匹配 key，灵活强大
+- 📊 **优先级控制**：支持设置 action 优先级，高优先级优先匹配
+- 🔒 **全局同步模式**：支持全局排他执行，阻塞所有其他 dispatch（可选）
+- 🛡️ **类型安全**：编译期类型检查，无需序列化/反序列化
+- 🚀 **高性能**：编译期注册，运行时零开销抽象
+- 🔧 **线程安全**：完全线程安全，支持多线程并发调用
+- 📝 **易于调试**：提供调试接口，查询所有已注册 action
 
-## 安装
+## 🎯 核心概念
 
-需要 Python 3.7+
+### 全局同步锁（Global Sync Lock）
 
-```bash
-# 无需额外依赖，只需标准库
-python action_dispatch.py  # 运行测试
+系统维护一个全局互斥锁，所有 `dispatch` 调用都会竞争此锁：
+
+| 模式 | 行为 | 适用场景 |
+|------|------|----------|
+| `sync = false` (默认) | 拿锁 → 匹配 → **释放锁** → 执行 | 普通操作，支持并发 |
+| `sync = true` | 拿锁 → 匹配 → **持有锁** → 执行 → 释放锁 | 关键操作，需要全局排他 |
+
+**设计思想**：
+
+- 所有 dispatch 请求入口串行化（竞争同一把锁）
+- `sync = false` 的 action 快速释放锁 → 允许并发
+- `sync = true` 的 action 持有锁直到完成 → 阻塞所有其他操作
+
+## 🚀 快速开始
+
+### 安装
+
+将以下内容添加到 `Cargo.toml`：
+
+```toml
+[dependencies]
+action_dispatch = { path = "./action_dispatch" }
 ```
 
-## 快速开始
+### 基础示例
 
-```python
-from action_dispatch import dispatcher.action, dispatch
+```rust
+use action_dispatch::{action, dispatch};
 
-@dataclass
-class UserEvent:
-    user_id: int
-    action: str
+#[derive(Clone)]
+struct MyEvent {
+    user_id: u64,
+    action: String,
+}
 
-# 普通 action（可并发）
-@action(regex=r'^user/\d+/read$', priority=5, sync=False)
-def handle_read(event: UserEvent):
-    print(f"读取用户: {event.user_id}")
+// 普通 action，支持并发执行
+#[action(regex = r"user/\d+/read", priority = 5, sync = false)]
+fn handle_read(event: MyEvent) {
+    println!("读取用户: {}", event.user_id);
+}
 
-# 关键 action（全局排他）
-@action(regex=r'^user/\d+/update$', priority=10, sync=True)
-def handle_update(event: UserEvent):
-    print(f"更新用户: {event.user_id} (独占执行)")
-    import time
-    time.sleep(2)  # 模拟耗时操作
+// 关键 action，全局同步执行
+#[action(regex = r"user/\d+/update", priority = 10, sync = true)]
+fn handle_update(event: MyEvent) {
+    println!("更新用户: {}（阻塞所有其他操作）", event.user_id);
+    std::thread::sleep(std::time::Duration::from_secs(2));
+}
 
-# 分发事件
-dispatch("user/123/read", UserEvent(123, "read"))
-dispatch("user/456/update", UserEvent(456, "update"))
+fn main() {
+    // 分发事件
+    dispatch("user/123/read", MyEvent {
+        user_id: 123,
+        action: "read".to_string(),
+    }).unwrap();
+
+    dispatch("user/456/update", MyEvent {
+        user_id: 456,
+        action: "update".to_string(),
+    }).unwrap();
+}
 ```
 
-## API 文档
+## 📚 详细文档
 
-### @action 装饰器
-
-```python
-@action(regex: str, priority: int = 0, description: str = "", sync: bool = False)
-```
-
-**参数**：
+### `#[action(...)]` 参数
 
 | 参数 | 类型 | 必需 | 默认值 | 说明 |
 |------|------|------|--------|------|
-| `regex` | `str` | ✅ | - | 匹配 key 的正则表达式 |
-| `priority` | `int` | ❌ | `0` | 优先级，数值越大越高 |
-| `description` | `str` | ❌ | `""` | 描述信息 |
-| `sync` | `bool` | ❌ | `False` | 是否全局同步模式 |
+| `regex` | `&str` | ✅ | - | 匹配 key 的正则表达式 |
+| `priority` | `i32` | ❌ | `0` | 优先级，数值越大优先级越高 |
+| `description` | `&str` | ❌ | `""` | 描述信息，用于调试和文档 |
+| `sync` | `bool` | ❌ | `false` | 是否启用全局同步执行模式 |
 
-### dispatch 函数
+### 函数签名要求
 
-```python
-dispatch(key: str, event: Any) -> None
+被 `#[action]` 标记的函数必须满足：
+
+1. **必须是自由函数**（不在 impl 块中）
+2. **恰好一个参数**：`fn(T)` 或 `fn(&T)`
+3. **所有 action 使用相同的事件类型 `T`**
+4. **返回值不限**（可以是任意类型或 `()`）
+
+### 分发函数
+
+```rust
+pub fn dispatch<T>(key: &str, event: T) -> Result<(), DispatchError>
+where
+    T: 'static + Send + Sync
 ```
 
 **执行流程**：
 
-1. 获取读锁进行匹配（允许并发）
-2. 查找匹配的 action（分层匹配优化）
-3. 根据 sync 标志执行：
-   - `sync=False`：保持读锁执行（并发）
-   - `sync=True`：升级为写锁执行（独占）
+1. 获取全局锁（阻塞直到成功）
+2. 在锁保护下遍历所有 action，找到第一个匹配且优先级最高的
+3. 若无匹配，释放锁并返回 `Err(DispatchError::NoMatch)`
+4. 若匹配成功：
+   - `sync = false`: 立即释放锁 → 执行函数（支持并发）
+   - `sync = true`: 保持持有锁 → 执行函数 → 完成后释放（全局排他）
 
-**异常**：
+### 错误处理
 
-- `NoMatchError`：没有匹配的 action
-- `LockPoisonedError`：锁被污染
+```rust
+use action_dispatch::{dispatch, DispatchError};
 
-### list_actions 函数
-
-```python
-list_actions() -> List[ActionInfo]
+match dispatch("some/key", event) {
+    Ok(()) => println!("分发成功"),
+    Err(DispatchError::NoMatch) => println!("没有匹配的 action"),
+    Err(DispatchError::Poisoned) => println!("锁已被污染"),
+}
 ```
 
-返回所有已注册的 action 信息（按优先级降序）。
+### 调试工具
 
-## 性能优化
+```rust
+use action_dispatch::list_actions;
 
-### 1. 分层匹配
-
-系统自动分析正则表达式，选择最优匹配策略：
-
-| 匹配类型 | 正则格式 | 时间复杂度 | 示例 |
-|---------|---------|-----------|------|
-| 精确匹配 | `^literal$` | O(1) | `^user/123$` |
-| 前缀匹配 | `^prefix.*` | O(m) | `^api/v1/.*` |
-| 复杂正则 | 其他 | O(k) | `^user/\d+$` |
-
-**推荐**：尽量使用精确匹配或前缀匹配
-
-```python
-# ✅ 推荐：精确匹配（最快）
-@action(regex=r"^user/profile$")
-def handle_profile(event): pass
-
-# ✅ 推荐：前缀匹配（快）
-@action(regex=r"^api/v1/.*")
-def handle_api(event): pass
-
-# ⚠️ 可接受：简单正则
-@action(regex=r"^user/\d+$")
-def handle_user_id(event): pass
-
-# ❌ 避免：复杂正则
-@action(regex=r"^(?:user|admin)/(?:profile|settings)/\d+$")
-def handle_complex(event): pass  # 慢
+// 列出所有已注册的 action
+for action in list_actions() {
+    println!(
+        "regex: {}, priority: {}, sync: {}, description: {}",
+        action.regex, action.priority, action.sync, action.description
+    );
+}
 ```
 
-### 2. RwLock 并发
+## 🎭 示例
 
-使用读写锁优化并发性能：
-
-- **sync=False**：持有读锁执行，多个可并发
-- **sync=True**：持有写锁执行，独占全局
-
-**性能对比**（10 线程）：
-
-| 模式 | 使用 Mutex | 使用 RwLock | 提升 |
-|------|-----------|------------|------|
-| sync=False | 串行（~1s） | 并发（~100ms） | **10x** |
-| sync=True | 串行（~2s） | 串行（~2s） | 无差异 |
-
-### 3. 零拷贝
-
-Python 的对象传递默认就是引用传递，**无需额外配置**。
-
-```python
-# Python 自动使用引用传递，零拷贝
-@action(regex=r"^large/.*$")
-def handle_large(event: LargeEvent):
-    # event 是引用，不会拷贝数据
-    pass
-```
-
-## 性能测试
-
-运行并发测试：
+### 运行基础示例
 
 ```bash
-python test_concurrent.py
+cd action_dispatch
+cargo run --example basic
 ```
 
-**预期输出**：
-
-```
-【测试 1】分层匹配性能
-精确匹配: 10000 次 dispatch
-  总耗时: 150.00 ms
-  平均耗时: 15.00 μs/次
-
-前缀匹配: 10000 次 dispatch
-  总耗时: 200.00 ms
-  平均耗时: 20.00 μs/次
-
-复杂正则: 10000 次 dispatch
-  总耗时: 500.00 ms
-  平均耗时: 50.00 μs/次
-
-【测试 2】并发执行（sync=False）
-5 个并发任务总耗时: 100 ms
-✓ 由于并发执行，总耗时约等于单个任务时间（~100ms）
-
-【测试 3】独占执行（sync=True）
-3 个独占任务总耗时: 600 ms
-✓ 由于串行执行，总耗时约等于 3 × 单个任务时间（~600ms）
-```
-
-## 性能对比
-
-### Python vs Rust
-
-| 指标 | Python | Rust | 说明 |
-|------|--------|------|------|
-| dispatch 耗时（精确匹配） | ~15 μs | ~0.1 μs | Rust **150x** 更快 |
-| dispatch 耗时（前缀匹配） | ~20 μs | ~5 μs | Rust **4x** 更快 |
-| dispatch 耗时（复杂正则） | ~50 μs | ~10 μs | Rust **5x** 更快 |
-| 内存占用 | ~10 MB | ~200 KB | Rust **50x** 更小 |
-| 并发能力 | 受 GIL 限制 | 真正并发 | Rust 更强 |
-
-**结论**：
-- Python 版本已经过优化，性能不错
-- Rust 版本性能更优（10-150x），内存更小
-- Python 版本更易用，适合原型开发
-- Rust 版本适合生产环境和高性能场景
-
-## Python 特有的优化
-
-### 1. GIL 优化
-
-Python 有全局解释器锁（GIL），但我们的实现仍然有优化：
-
-- **I/O 密集型**：释放 GIL，真正并发
-- **CPU 密集型**：受 GIL 限制，但分层匹配仍能提速
-
-### 2. 使用 PyPy
-
-使用 PyPy 可以获得 2-5x 的性能提升：
+### 运行并发示例
 
 ```bash
-pypy3 action_dispatch.py  # 使用 PyPy 运行
+cargo run --example concurrent
 ```
 
-### 3. 使用 Cython
+并发示例展示了：
 
-可以将核心模块编译为 C 扩展，获得接近 C 的性能：
+1. **场景 1**：多个 `sync = false` 的 action 并发执行
+2. **场景 2**：`sync = true` 的 action 阻塞后续操作
+3. **场景 3**：关键操作（`sync = true`）阻塞所有其他 dispatch
+
+## ⚡ 性能特点
+
+- **编译期注册**：使用 `inventory` crate 在编译期收集所有 handler
+- **零动态分配**：action 列表在程序启动时初始化，之后只读
+- **高效匹配**：使用预编译的正则表达式，支持内部缓存
+- **最小锁竞争**：`sync = false` 的 action 快速释放锁，减少竞争
+- **类型擦除**：使用原始指针实现零成本类型擦除
+
+### 性能基准（参考）
+
+| 操作 | 耗时 | 说明 |
+|------|------|------|
+| 匹配 + 分发（sync=false） | ~1-5 μs | 正则匹配 + 函数调用 |
+| 获取全局锁 | ~10-50 ns | 无竞争情况下 |
+| 全局锁竞争 | ~100-500 ns | 有竞争但快速释放 |
+
+> ⚠️ 实际性能取决于：正则表达式复杂度、action 数量、锁竞争程度
+
+## 🔧 高级用法
+
+### 多个正则匹配同一 key
+
+当多个 action 的正则表达式都匹配同一个 key 时，**优先级最高的 action 会被执行**：
+
+```rust
+#[action(regex = r"user/.*", priority = 1)]
+fn handle_user_general(event: MyEvent) {
+    // 通用处理
+}
+
+#[action(regex = r"user/admin/.*", priority = 10)]
+fn handle_user_admin(event: MyEvent) {
+    // 管理员处理（优先级更高，会被优先匹配）
+}
+```
+
+### 复杂正则表达式
+
+```rust
+#[action(regex = r"^api/v[12]/users/\d+/(profile|settings)$", priority = 5)]
+fn handle_api_request(event: MyEvent) {
+    // 匹配: api/v1/users/123/profile
+    // 匹配: api/v2/users/456/settings
+    // 不匹配: api/v3/users/789/profile
+}
+```
+
+### 与异步运行时集成
+
+虽然当前版本使用 `std::sync::Mutex`，但可以轻松扩展为异步版本：
+
+```rust
+// 未来版本可能支持
+#[action_async(regex = r"async/task", sync = true)]
+async fn handle_async(event: MyEvent) {
+    tokio::time::sleep(Duration::from_secs(1)).await;
+}
+```
+
+## ⚠️ 注意事项
+
+### 避免死锁
+
+**不要在 `sync = true` 的 action 中再次调用 `dispatch`**：
+
+```rust
+#[action(regex = r"task/.*", sync = true)]
+fn bad_handler(event: MyEvent) {
+    // ❌ 错误：会导致死锁！
+    dispatch("another/task", event).unwrap();
+}
+```
+
+**解决方案**：
+
+1. 使用 `sync = false`（如果不需要全局排他）
+2. 重构逻辑，避免嵌套调用
+3. 使用异步版本（未来支持）
+
+### 性能考虑
+
+1. **谨慎使用 `sync = true`**：会阻塞所有其他 dispatch，影响吞吐量
+2. **正则表达式优化**：复杂的正则会影响匹配速度，尽量简化
+3. **减少 action 数量**：action 越多，匹配遍历越慢
+4. **避免长时间执行**：handler 应该快速完成，或使用异步
+
+### 类型一致性
+
+所有 action 必须使用相同的事件类型：
+
+```rust
+// ❌ 错误：不同的事件类型
+#[action(regex = r"type1/.*")]
+fn handler1(event: EventA) { }
+
+#[action(regex = r"type2/.*")]
+fn handler2(event: EventB) { } // 编译错误！
+```
+
+**解决方案**：使用 enum 或 trait object 统一类型。
+
+## 🧪 测试
+
+运行所有测试：
 
 ```bash
-# 安装 Cython
-pip install cython
-
-# 编译
-cython action_dispatch.py  # 生成 .c 文件
-gcc -shared -pthread -fPIC -fwrapv -O2 -Wall -fno-strict-aliasing \
-    -I/usr/include/python3.x action_dispatch.c -o action_dispatch.so
+cd action_dispatch
+cargo test --all
 ```
 
-## 注意事项
+测试覆盖：
 
-### 1. GIL 限制
+- ✅ 基础分发功能
+- ✅ 优先级匹配
+- ✅ 并发安全性
+- ✅ 全局同步锁行为
+- ✅ 错误处理
+- ✅ 正则表达式匹配
 
-Python 的 GIL 限制了真正的并发：
-
-- **CPU 密集型任务**：RwLock 提升有限
-- **I/O 密集型任务**：RwLock 提升显著
-
-### 2. 避免死锁
-
-不要在 `sync=True` 的 handler 中再次调用 `dispatch`：
-
-```python
-# ❌ 错误：会死锁
-@action(regex=r"^task1$", sync=True)
-def bad_handler(event):
-    dispatch("task2", event)  # 死锁！
-
-# ✅ 正确：使用 sync=False
-@action(regex=r"^task1$", sync=False)
-def good_handler(event):
-    dispatch("task2", event)  # OK
-```
-
-### 3. 类型提示
-
-虽然提供了类型提示，但 Python 运行时不强制检查：
-
-```python
-from typing import TypeVar, Generic
-
-T = TypeVar('T')
-
-# 可以添加运行时类型检查
-def dispatch_typed(key: str, event: T) -> None:
-    if not isinstance(event, expected_type):
-        raise TypeError(f"Expected {expected_type}, got {type(event)}")
-    dispatch(key, event)
-```
-
-## 进阶用法
-
-### 1. 性能监控
-
-```python
-from action_dispatch import dispatch_with_stats, get_stats, reset_stats
-
-# 使用带统计的 dispatch
-for _ in range(1000):
-    dispatch_with_stats("user/123", event)
-
-# 获取统计信息
-stats = get_stats()
-print(f"平均耗时: {stats.average_time_us():.2f} μs")
-print(f"总调用: {stats.total_dispatches}")
-```
-
-### 2. 自定义错误处理
-
-```python
-from action_dispatch import dispatch, NoMatchError
-
-try:
-    dispatch("unknown/key", event)
-except NoMatchError:
-    # 记录日志或回退处理
-    logger.warning(f"No handler for: unknown/key")
-    fallback_handler(event)
-```
-
-### 3. 动态注册
-
-```python
-from action_dispatch import dispatcher.action
-
-# 动态创建 handler
-def create_handler(name: str):
-    @action(regex=f"^{name}/.*$", priority=5)
-    def handler(event):
-        print(f"Handle {name}: {event}")
-    return handler
-
-# 批量创建
-for name in ["user", "order", "payment"]:
-    create_handler(name)
-```
-
-## 文件结构
+## 📂 项目结构
 
 ```
-py/
-├── action_dispatch.py      # 核心实现
-├── test_concurrent.py      # 并发测试
-└── README.md              # 本文档
+action_dispatch/
+├── Cargo.toml                    # Workspace 配置
+├── README.md                     # 本文档
+├── action_dispatch/              # 主 crate
+│   ├── Cargo.toml
+│   ├── src/
+│   │   └── lib.rs               # Re-export 所有功能
+│   ├── examples/
+│   │   ├── basic.rs             # 基础示例
+│   │   └── concurrent.rs        # 并发示例
+│   └── tests/
+│       └── integration_test.rs  # 集成测试
+├── action_dispatch_core/         # 核心运行时
+│   ├── Cargo.toml
+│   └── src/
+│       └── lib.rs               # 注册表、锁、dispatch 函数
+└── action_dispatch_macro/        # 属性宏
+    ├── Cargo.toml
+    └── src/
+        └── lib.rs               # #[action] 宏实现
 ```
 
-## 许可证
+## 🛠️ 开发
 
-MIT OR Apache-2.0
+### 构建项目
+
+```bash
+cargo build --all
+```
+
+### 运行示例
+
+```bash
+cargo run --example basic
+cargo run --example concurrent
+```
+
+### 格式化代码
+
+```bash
+cargo fmt --all
+```
+
+### Lint 检查
+
+```bash
+cargo clippy --all -- -D warnings
+```
+
+## 📖 设计文档
+
+### 架构概览
+
+```
+┌─────────────────────────────────────────────────┐
+│                   用户代码                        │
+│  #[action(...)] fn handler(event: T) { }       │
+└─────────────────┬───────────────────────────────┘
+                  │ (编译期)
+                  ▼
+┌─────────────────────────────────────────────────┐
+│            action_dispatch_macro                │
+│  解析注解 → 生成 inventory::submit! 代码         │
+└─────────────────┬───────────────────────────────┘
+                  │ (链接期)
+                  ▼
+┌─────────────────────────────────────────────────┐
+│            action_dispatch_core                 │
+│  ┌─────────────────────────────────────┐       │
+│  │  全局注册表 (ACTION_REGISTRY)        │       │
+│  │  - Vec<&'static ActionHandler>      │       │
+│  │  - 按优先级排序                      │       │
+│  └─────────────────────────────────────┘       │
+│  ┌─────────────────────────────────────┐       │
+│  │  全局分发锁 (GLOBAL_DISPATCH_LOCK)   │       │
+│  │  - Mutex<()>                        │       │
+│  └─────────────────────────────────────┘       │
+└─────────────────┬───────────────────────────────┘
+                  │ (运行时)
+                  ▼
+┌─────────────────────────────────────────────────┐
+│         dispatch(key, event)                    │
+│  1. 获取全局锁                                   │
+│  2. 匹配 key（正则 + 优先级）                    │
+│  3. 决定是否释放锁（根据 sync）                  │
+│  4. 执行 handler                                │
+│  5. 返回结果                                     │
+└─────────────────────────────────────────────────┘
+```
+
+### 类型擦除技术
+
+为了支持不同的函数签名统一注册，我们使用了类型擦除：
+
+```rust
+// 用户函数: fn(MyEvent)
+// 擦除为: fn(*const ())
+// 执行时: 通过原始指针还原类型
+```
+
+这是一个 **零成本抽象**，不涉及动态分配或虚函数表。
+
+## 📜 许可证
+
+本项目采用双许可证：
+
+- MIT License ([LICENSE-MIT](LICENSE-MIT))
+- Apache License 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+
+您可以选择其中任意一种许可证使用本项目。
+
+## 🤝 贡献
+
+欢迎贡献！请查看 [CONTRIBUTING.md](CONTRIBUTING.md)（待添加）。
+
+## 📮 联系
+
+- Issues: [GitHub Issues](https://github.com/example/action_dispatch/issues)
+- Discussions: [GitHub Discussions](https://github.com/example/action_dispatch/discussions)
+
+## 🙏 致谢
+
+本项目使用了以下优秀的开源库：
+
+- [inventory](https://github.com/dtolnay/inventory) - 编译期收集
+- [regex](https://github.com/rust-lang/regex) - 正则表达式
+- [once_cell](https://github.com/matklad/once_cell) - 全局静态变量
+- [syn](https://github.com/dtolnay/syn) - Rust 语法解析
+- [quote](https://github.com/dtolnay/quote) - 过程宏代码生成
 
 ---
 
-**Happy coding with Python! 🐍**
+**Happy coding! 🦀**
 
