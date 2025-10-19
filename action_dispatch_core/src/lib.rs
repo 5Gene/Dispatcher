@@ -16,11 +16,21 @@
 
 use regex::Regex;
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard, PoisonError};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
 
 // Re-export inventory 供宏使用
 pub use inventory;
+
+/// 全局并发控制配置
+/// 
+/// 如果设置为 true，强制所有 dispatch 串行执行（即使 sync = false）
+/// 适用场景：
+/// - 调试：简化并发问题排查
+/// - 嵌入式系统：单核环境无需并发
+/// - 性能测试：对比单线程 vs 多线程性能
+static FORCE_SINGLE_THREAD: AtomicBool = AtomicBool::new(false);
 
 /// 全局分发锁（使用 RwLock 优化并发性能）
 /// 
@@ -32,6 +42,8 @@ pub use inventory;
 /// 使用 RwLock 而不是 Mutex 的优势：
 /// - 多个 sync = false 的 action 可以真正并发执行
 /// - sync = true 的 action 仍然具有全局排他性
+/// 
+/// 如果 FORCE_SINGLE_THREAD = true，所有操作都使用写锁
 static GLOBAL_DISPATCH_LOCK: Lazy<RwLock<()>> = Lazy::new(|| RwLock::new(()));
 
 /// Action 元数据（编译期可用）
@@ -407,11 +419,15 @@ where
         }
     };
 
-    // 4. 根据 sync 标志决定执行策略
+    // 4. 根据全局并发配置和 sync 标志决定执行策略
     let ptr = &event as *const T as *const ();
+    let force_single = FORCE_SINGLE_THREAD.load(Ordering::Relaxed);
     
-    if handler.sync {
-        // sync = true: 需要全局排他，升级为写锁
+    if handler.sync || force_single {
+        // 需要全局排他执行：
+        // - handler.sync = true: action 级别要求独占
+        // - force_single = true: 全局配置强制单线程
+        
         // 先释放读锁，然后获取写锁
         drop(read_guard);
         let _write_guard = GLOBAL_DISPATCH_LOCK
@@ -430,8 +446,8 @@ where
         
         // write_guard 在此自动 drop，释放写锁
     } else {
-        // sync = false: 保持读锁执行（允许并发）
-        // 多个 sync = false 的 action 可以同时持有读锁并发执行
+        // sync = false 且未强制单线程: 保持读锁执行（允许并发）
+        // 多个这样的 action 可以同时持有读锁并发执行
         
         // SAFETY: 我们确保类型匹配
         unsafe { handler.call(ptr) };
@@ -447,6 +463,72 @@ where
     }
 
     Ok(())
+}
+
+/// 配置全局并发策略
+/// 
+/// # 参数
+/// 
+/// - `force_single_thread`: 如果为 `true`，强制所有 dispatch 串行执行
+/// 
+/// # 使用场景
+/// 
+/// ### 1. 调试模式
+/// 
+/// ```ignore
+/// fn main() {
+///     // 调试时强制单线程，简化问题排查
+///     action_dispatch::set_single_thread_mode(true);
+///     
+///     dispatch("key", event).unwrap();
+/// }
+/// ```
+/// 
+/// ### 2. 嵌入式系统
+/// 
+/// ```ignore
+/// // 单核 CPU，无需并发开销
+/// action_dispatch::set_single_thread_mode(true);
+/// ```
+/// 
+/// ### 3. 性能测试
+/// 
+/// ```ignore
+/// // 对比单线程 vs 多线程性能
+/// set_single_thread_mode(false);
+/// let t1 = benchmark();
+/// 
+/// set_single_thread_mode(true);
+/// let t2 = benchmark();
+/// ```
+/// 
+/// # 注意
+/// 
+/// - 必须在首次调用 `dispatch()` **之前**设置
+/// - 线程安全：可以在任何时候调用，但建议在程序启动时设置一次
+/// - 默认值：`false`（启用并发）
+pub fn set_single_thread_mode(force_single_thread: bool) {
+    FORCE_SINGLE_THREAD.store(force_single_thread, Ordering::Relaxed);
+}
+
+/// 获取当前的并发模式
+/// 
+/// # 返回值
+/// 
+/// - `true`: 单线程模式（所有 dispatch 串行执行）
+/// - `false`: 多线程模式（`sync = false` 的 action 可并发）
+/// 
+/// # 示例
+/// 
+/// ```ignore
+/// if action_dispatch::is_single_thread_mode() {
+///     println!("当前为单线程模式");
+/// } else {
+///     println!("当前为多线程模式");
+/// }
+/// ```
+pub fn is_single_thread_mode() -> bool {
+    FORCE_SINGLE_THREAD.load(Ordering::Relaxed)
 }
 
 /// 获取所有已注册的 action 信息（用于调试）

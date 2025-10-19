@@ -51,7 +51,7 @@ fn handle_update(event: MyEvent) {
 }
 
 fn main() {
-    // 分发事件
+    // 直接分发事件（首次调用会自动初始化注册表）
     dispatch("user/123/read", MyEvent {
         user_id: 123,
         action: "read".to_string(),
@@ -138,6 +138,46 @@ match dispatch("unknown/key", event) {
 }
 ```
 
+## 并发控制
+
+### 全局单线程模式
+
+可以配置全局并发策略，强制所有 dispatch 串行执行：
+
+```rust
+use action_dispatch::set_single_thread_mode;
+
+fn main() {
+    // 启用单线程模式（调试/嵌入式系统）
+    set_single_thread_mode(true);
+    
+    // 即使在多线程环境中，所有 dispatch 也会串行执行
+    dispatch("key1", event1).unwrap();
+    dispatch("key2", event2).unwrap();
+}
+```
+
+### 使用场景
+
+| 场景 | 配置 | 说明 |
+|------|------|------|
+| 生产环境 | `set_single_thread_mode(false)` | 默认，启用并发 |
+| 调试模式 | `set_single_thread_mode(true)` | 简化并发问题排查 |
+| 嵌入式系统 | `set_single_thread_mode(true)` | 单核 CPU 无需并发 |
+| 性能测试 | 动态切换 | 对比单/多线程性能 |
+
+### 查询当前模式
+
+```rust
+use action_dispatch::is_single_thread_mode;
+
+if is_single_thread_mode() {
+    println!("当前为单线程模式");
+} else {
+    println!("当前为多线程模式");
+}
+```
+
 ## 调试工具
 
 ```rust
@@ -145,7 +185,8 @@ use action_dispatch::list_actions;
 
 // 列出所有已注册的 action
 for action in list_actions() {
-    println!("{:?}", action);
+    println!("Action: {} (优先级: {}, sync: {})", 
+             action.regex, action.priority, action.sync);
 }
 ```
 
@@ -163,7 +204,12 @@ MIT OR Apache-2.0
 
 // Re-export 核心功能
 pub use action_dispatch_core::{
-    dispatch, list_actions, ActionInfo, DispatchError,
+    dispatch, 
+    list_actions, 
+    set_single_thread_mode, 
+    is_single_thread_mode,
+    ActionInfo, 
+    DispatchError,
 };
 
 // Re-export 宏
