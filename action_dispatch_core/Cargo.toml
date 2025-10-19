@@ -9,6 +9,7 @@ license.workspace = true
 regex = { workspace = true }
 once_cell = { workspace = true }
 inventory = { workspace = true }
+aho-corasick = { workspace = true }
 
 [lib]
 name = "action_dispatch_core"

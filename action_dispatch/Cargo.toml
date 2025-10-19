@@ -17,5 +17,6 @@ name = "action_dispatch"
 path = "src/lib.rs"
 
 [dev-dependencies]
-# 用于测试
+# 用于测试和示例
+rand = "0.8"
 
