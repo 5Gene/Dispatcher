@@ -38,7 +38,7 @@ fn benchmark(mode: &str, single_thread: bool, task_count: usize) {
         .map(|i| {
             thread::spawn(move || {
                 let task = Task {
-                    id: i,
+                    id: i as u64,
                     name: format!("任务{}", i),
                 };
                 

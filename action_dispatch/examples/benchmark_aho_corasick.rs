@@ -290,7 +290,7 @@ fn main() {
     let mut regex_count = 0;
     
     for action in &actions {
-        let regex_str = action.regex;
+        let regex_str = &action.regex; // 修复点：改为借用
         if regex_str.starts_with('^') && regex_str.ends_with('$') 
             && !regex_str.contains(r"\d") 
             && !regex_str.contains('[') 
