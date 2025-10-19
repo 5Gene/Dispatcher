@@ -123,7 +123,7 @@ impl std::fmt::Debug for ActionHandler {
     }
 }
 
-/// 使用 inventory crate 收集所有通过 #[action] 注册的元数据
+// 使用 inventory crate 收集所有通过 #[action] 注册的元数据
 inventory::collect!(ActionMetadata);
 
 /// 匹配策略（用于优化匹配性能）
@@ -133,6 +133,7 @@ inventory::collect!(ActionMetadata);
 /// - 前缀匹配：O(m) 遍历前缀列表（m << n）
 /// - 复杂正则：O(k) 遍历复杂正则列表（k << n）
 #[derive(Debug, Clone)]
+#[allow(dead_code)]  // Regex variant 在 is_match 方法中使用
 enum MatchStrategy {
     /// 精确匹配：如 r"^user/123$"
     /// 直接字符串比较，O(1)
@@ -215,6 +216,7 @@ impl MatchStrategy {
     
     /// 检查 key 是否匹配
     #[inline]
+    #[allow(dead_code)]  // 保留以备将来使用
     fn is_match(&self, key: &str) -> bool {
         match self {
             MatchStrategy::Exact(exact) => key == exact,

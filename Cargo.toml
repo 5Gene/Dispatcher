@@ -14,15 +14,15 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/example/action_dispatch"
 
 [workspace.dependencies]
-# 核心依赖
-regex = "1.10"
-once_cell = "1.19"
-inventory = "0.3"
+# 核心依赖（升级到最新版本）
+regex = "1.11"          # 1.10 → 1.11
+once_cell = "1.20"      # 1.19 → 1.20
+inventory = "0.3"       # 已是最新
 
-# 宏依赖
-syn = { version = "2.0", features = ["full"] }
-quote = "1.0"
-proc-macro2 = "1.0"
+# 宏依赖（升级到最新版本）
+syn = { version = "2.0", features = ["full"] }  # 已是最新 2.x
+quote = "1.0"           # 已是最新 1.x
+proc-macro2 = "1.0"     # 已是最新 1.x
 
 [profile.release]
 opt-level = 3

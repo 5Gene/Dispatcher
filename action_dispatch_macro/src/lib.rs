@@ -17,7 +17,8 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{
-    parse_macro_input, AttributeArgs, ItemFn, Lit, Meta, MetaNameValue, NestedMeta,
+    parse_macro_input, punctuated::Punctuated, token::Comma, Expr, ExprLit, ItemFn, Lit, Meta,
+    MetaNameValue,
 };
 
 /// #[action(...)] 属性宏
@@ -39,7 +40,8 @@ use syn::{
 /// ```
 #[proc_macro_attribute]
 pub fn action(args: TokenStream, input: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(args as AttributeArgs);
+    // syn 2.0: 使用 Punctuated 替代 AttributeArgs
+    let args = parse_macro_input!(args with Punctuated::<Meta, Comma>::parse_terminated);
     let input_fn = parse_macro_input!(input as ItemFn);
 
     // 解析参数
@@ -67,7 +69,7 @@ struct ActionParams {
 }
 
 /// 解析 #[action(...)] 的参数
-fn parse_action_params(args: AttributeArgs) -> syn::Result<ActionParams> {
+fn parse_action_params(args: Punctuated<Meta, Comma>) -> syn::Result<ActionParams> {
     let mut regex: Option<String> = None;
     let mut priority: i32 = 0;
     let mut description: String = String::new();
@@ -76,58 +78,58 @@ fn parse_action_params(args: AttributeArgs) -> syn::Result<ActionParams> {
 
     for arg in args {
         match arg {
-            NestedMeta::Meta(Meta::NameValue(MetaNameValue { path, lit, .. })) => {
+            Meta::NameValue(MetaNameValue { path, value, .. }) => {
                 let ident = path.get_ident().ok_or_else(|| {
                     syn::Error::new_spanned(&path, "无效的参数名")
                 })?;
 
                 match ident.to_string().as_str() {
                     "regex" => {
-                        if let Lit::Str(s) = lit {
+                        if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = value {
                             regex = Some(s.value());
                         } else {
                             return Err(syn::Error::new_spanned(
-                                lit,
+                                value,
                                 "regex 参数必须是字符串字面量",
                             ));
                         }
                     }
                     "priority" => {
-                        if let Lit::Int(i) = lit {
+                        if let Expr::Lit(ExprLit { lit: Lit::Int(i), .. }) = value {
                             priority = i.base10_parse()?;
                         } else {
                             return Err(syn::Error::new_spanned(
-                                lit,
+                                value,
                                 "priority 参数必须是整数字面量",
                             ));
                         }
                     }
                     "description" => {
-                        if let Lit::Str(s) = lit {
+                        if let Expr::Lit(ExprLit { lit: Lit::Str(s), .. }) = value {
                             description = s.value();
                         } else {
                             return Err(syn::Error::new_spanned(
-                                lit,
+                                value,
                                 "description 参数必须是字符串字面量",
                             ));
                         }
                     }
                     "sync" => {
-                        if let Lit::Bool(b) = lit {
+                        if let Expr::Lit(ExprLit { lit: Lit::Bool(b), .. }) = value {
                             sync = b.value;
                         } else {
                             return Err(syn::Error::new_spanned(
-                                lit,
+                                value,
                                 "sync 参数必须是布尔字面量（true 或 false）",
                             ));
                         }
                     }
                     "by_ref" => {
-                        if let Lit::Bool(b) = lit {
+                        if let Expr::Lit(ExprLit { lit: Lit::Bool(b), .. }) = value {
                             by_ref = b.value;
                         } else {
                             return Err(syn::Error::new_spanned(
-                                lit,
+                                value,
                                 "by_ref 参数必须是布尔字面量（true 或 false）",
                             ));
                         }
