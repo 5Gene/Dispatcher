@@ -1,10 +1,13 @@
+import random
+import time
+
 from dispatcher.action_dispatch_v3 import action
 
 
-@action(r"\d", "匹配数字")
+@action(r"\d", "匹配数字", priority=20, sync=True)
 def method1(arg):
-    print(f"Method d 1 ==> {arg}")
+    print(f"Method d 数字🔢 ==> {arg}")
     # with lock:
-    #     time.sleep(10)
-    print(f"Method d 2 ==> {arg}")
-    return "Method d 2"
+    time.sleep(random.uniform(1, 5)+4)
+    print(f"Method d 耗时结束 ==> {arg}")
+    return f"返回值：Method d {arg}"

@@ -1,0 +1,57 @@
+# This workflow will upload a Python Package using Twine when a release is created
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: publish
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - 'v*'  # 仅在标签匹配 'v*' 模式时触发
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.x'
+    - name: Install dependencies
+      run: |
+        cd easy
+        python -m pip install --upgrade pip
+        python -m pip install --upgrade twine
+        pip install build
+        pip install wheel setuptools
+        pip install packaging
+
+    - name: Build package
+#      working-directory: easy
+      run: |
+        python -m build
+        python setup.py sdist bdist_wheel
+
+
+    - name: Publish package
+#      working-directory: easy  # 进入目标目录
+      run: |
+        python -m twine upload dist/*
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
