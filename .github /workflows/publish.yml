@@ -1,0 +1,95 @@
+name: Release Rust Crate
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # 触发条件：推送 v 开头的语义化版本标签，如 v1.0.0
+  workflow_dispatch:  # 允许手动触发
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # 发布到 crates.io
+  publish:
+    name: Publish to crates.io
+    needs: test  # 等待测试通过
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish to crates.io
+        run: cargo publish --token ${{ secrets.RUST_PUBLISH }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.RUST_PUBLISH }}
+
+  # 创建 GitHub Release
+  github-release:
+    name: Create GitHub Release
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整历史以生成变更日志
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # 获取上一个标签
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # 如果没有上一个标签，获取所有提交
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            # 获取两个标签之间的提交
+            CHANGELOG=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          # 保存到文件
+          echo "$CHANGELOG" > changelog.txt
+          
+          # 转义特殊字符用于 GitHub Actions
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release v${{ steps.version.outputs.VERSION }}
+          body: |
+            ## 🚀 Release v${{ steps.version.outputs.VERSION }}
+            
+            ### 📦 Installation
+            ```toml
+            [dependencies]
+            ${{ github.event.repository.name }} = "${{ steps.version.outputs.VERSION }}"
+            ```
+            
+            Or via cargo:
+            ```bash
+            cargo add ${{ github.event.repository.name }}@${{ steps.version.outputs.VERSION }}
+            ```
+            
+            ### 📝 Changes
+            ${{ steps.changelog.outputs.CHANGELOG }}
+            
+            ### 📚 Documentation
+            - [Crates.io](https://crates.io/crates/${{ github.event.repository.name }})
+            - [Docs.rs](https://docs.rs/${{ github.event.repository.name }}/${{ steps.version.outputs.VERSION }})
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}

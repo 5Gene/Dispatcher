@@ -9,9 +9,14 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Action Dispatch Contributors"]
+authors = ["jonas.jzy@gmail.com"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/example/action_dispatch"
+repository = "https://github.com/5Gene/Dispatcher"
+description = "通用的基于属性宏的 Action 注册与分发系统"  # ✅ 描述
+keywords = ["action", "dispatch", "macro", "event", "handler"]  # ✅ 关键词
+categories = ["rust-patterns", "asynchronous"]  # ✅ 分类
+homepage = "https://github.com/5Gene"
+
 
 [workspace.dependencies]
 # 核心依赖（升级到最新版本）
