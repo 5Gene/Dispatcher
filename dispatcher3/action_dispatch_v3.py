@@ -18,8 +18,8 @@ import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple, Set
 import time
 
-from dispatcher.lock import global_rw_lock, global_executor
-from dispatcher.dto import MatchPattern, MatchStrategy, global_registry, ActionFunc, ActionMetadata, \
+from dispatcher3.lock import global_rw_lock, global_executor
+from dispatcher3.dto import MatchPattern, MatchStrategy, global_registry, ActionFunc, ActionMetadata, \
     RegistryFrozenError, NoMatchError, RegistryNotInitializedError, ActionInfo
 
 # 调试模式（生产环境设为 False）

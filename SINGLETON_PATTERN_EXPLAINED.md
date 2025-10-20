@@ -15,12 +15,12 @@ _global_lock = FastRWLock()
 
 ```python
 # 场景 1：普通导入（没问题）
-from dispatcher import dispatcher.action_dispatch_v3
+from dispatcher3 import dispatcher.action_dispatch_v3
 # Python 会缓存模块，_registry 是同一个实例 ✅
 
 # 场景 2：多次导入（没问题）
-import dispatcher.action_dispatch_v3 as ad1
-import dispatcher.action_dispatch_v3 as ad2
+import dispatcher3.action_dispatch_v3 as ad1
+import dispatcher3.action_dispatch_v3 as ad2
 # ad1._registry 和 ad2._registry 是同一个对象 ✅
 
 # 场景 3：reload（有问题！）
@@ -30,7 +30,7 @@ importlib.reload(action_dispatch_v3)
 # 会重新执行模块代码，创建新的 _registry！❌
 
 # 场景 4：不同路径导入（可能有问题）
-import dispatcher.action_dispatch_v3
+import dispatcher3.action_dispatch_v3
 import py.action_dispatch_v3  # 如果路径不同
 # 可能被识别为不同模块，创建多个实例！❌
 ```
@@ -152,13 +152,13 @@ _global_lock = FastRWLock()
 import sys
 
 # 导入模块
-import dispatcher.action_dispatch_v3
+import dispatcher3.action_dispatch_v3
 
 # Python 会把模块缓存到 sys.modules
 print(sys.modules['action_dispatch_v3'])  # <module 'action_dispatch_v3'>
 
 # 再次导入，从缓存获取，不会重新执行
-import dispatcher.action_dispatch_v3 as ad2
+import dispatcher3.action_dispatch_v3 as ad2
 # ad2 和 action_dispatch_v3 是同一个模块对象
 ```
 
@@ -276,12 +276,13 @@ static GLOBAL_DISPATCH_LOCK: RwLock<()> = RwLock::new(());
 #### 1. **真正的静态变量**
 
 **Python**：
+
 ```python
 # 模块级变量（本质是模块对象的属性）
 _registry = LayeredRegistry()  # 可能被重新创建
 
 # 运行时初始化
-import dispatcher.action_dispatch  # 执行代码，创建对象
+import dispatcher3.action_dispatch  # 执行代码，创建对象
 ```
 
 **Rust**：

@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 readme_path = 'README.md'
 
 setup(
-    name='dispatcher',
+    name='dispatcher3',
     version='0.1',
     author='5hmlA',
     author_email='gene.jzy@gmail.com',
@@ -15,7 +15,7 @@ setup(
     # 找到当前目录下有哪些包 当前(setup.py)目录下的文件夹 当前目录的py不包含 打包的是把所有代码放一个文件夹下文件名为库名字
     packages=find_packages(),
     # 要打包的代码所在目录和库名字不一样，需要手动指定
-    # packages=['dispatcher'],
+    # packages=['dispatcher3'],
     # 配置readme
     long_description=open(readme_path, encoding='utf-8').read(),
     long_description_content_type='text/markdown',
@@ -36,7 +36,7 @@ setup(
         # 只包含包名。 这种形式只检查包的存在性，不检查版本。 方便，但不利于控制风险。
         # 'setuptools==38.2.4'，指定版本。 这种形式把风险降到了最低，确保了开发、测试与部署的版本一致，不会出现意外。 缺点是不利于更新，每次更新都需要改动代码
     ],
-    keywords='action, dispatcher',
+    keywords='action, dispatcher3',
     url='https://github.com/5hmlA/PyTools',
     description='python library for dispatch action'
 )

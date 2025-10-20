@@ -1,7 +1,7 @@
 import random
 import time
 
-from dispatcher.action_dispatch_v3 import action
+from dispatcher3.action_dispatch_v3 import action
 
 @action(r"\w", "匹配字母", 10)
 def method2(arg):

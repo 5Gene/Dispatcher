@@ -1,7 +1,7 @@
 # 这是一个示例 Python 脚本。
 import time
 
-from dispatcher.action_dispatch_v3 import _init_actions_auto, dispatch, auto_import_package_modules
+from dispatcher3.action_dispatch_v3 import _init_actions_auto, dispatch, auto_import_package_modules
 
 
 # 按 ⌃R 执行或将其替换为您的代码。
