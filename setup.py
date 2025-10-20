@@ -1,4 +1,4 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 # PyCharm 自动生成 requirements.txt
 # 使用Python打开自己的工程，然后点击Tools，最后点击Sync Python Requirements
